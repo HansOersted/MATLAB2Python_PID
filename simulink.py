@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def run_simulation(mv_input, pressure_input, coefficient_P_pressure, coefficient_P, coefficient_I, coefficient_D, Ts):
+def run_simulation(mv_input, pressure_input, e, coefficient_P_pressure, coefficient_P, coefficient_I, coefficient_D, Ts):
     # 检查数据
     t = mv_input[:, 0]  # 时间
     mv = mv_input[:, 1]  # mv 值
@@ -11,13 +11,7 @@ def run_simulation(mv_input, pressure_input, coefficient_P_pressure, coefficient
     # 计算前馈 mv
     mv_feedforward = pressure * coefficient_P_pressure  # 前馈 mv = 压力 * 比例系数
     
-    # 计算跟踪误差 e = SV - PV
-    # 在这里，e = SV - PV。假设你已经从其他数据中获取了 SV 和 PV，或者直接在数据文件中给出。
-    # 注意：你需要正确读取并提供 SV 和 PV 数据，这里假设你已经从 CSV 里导入了 SV 和 PV。
-    # 假设你有 SV 和 PV 数据，这里我直接用 mv_input 的第二列作为例子
-    # 在实际情况中，SV 和 PV 应该是分别从你的数据中提取出来的
-    e = mv_input[:, 1]  # 这里仅用 mv_input 的第二列作为误差 e（你可以替换为实际的跟踪误差计算）
-
+    # 使用传入的误差 e 进行 PID 控制
     integral = np.zeros_like(e)
     derivative = np.zeros_like(e)
     mv_pid = np.zeros_like(e)
@@ -35,20 +29,33 @@ def run_simulation(mv_input, pressure_input, coefficient_P_pressure, coefficient
         # 总和
         mv_pid[i] = P_term + integral[i] + derivative[i]
 
-    # 最终的 mv 是前馈 mv 和 PID mv 相加
-    mv_final = mv_feedforward + mv_pid
+    # 计算离散微分（模拟 Simulink 中的 Discrete Derivative）
+    mv_pid_derivative = np.zeros_like(mv_pid)
+    for i in range(1, len(mv_pid)):
+        mv_pid_derivative[i] = (mv_pid[i] - mv_pid[i-1]) / Ts  # 离散微分公式
+
+    # **离散积分模块**（Forward Euler方法）作用于 mv_pid_derivative
+    mv_pid_derivative_integrated = np.zeros_like(mv_pid_derivative)
+    mv_pid_derivative_integrated[0] = 78.1  # 初始条件设为 78.1
+    for i in range(1, len(mv_pid_derivative)):
+        mv_pid_derivative_integrated[i] = mv_pid_derivative_integrated[i-1] + mv_pid_derivative[i] * Ts  # 离散积分
+
+    # 最终的 mv 是前馈 mv 和积分后的 PID 微分相加
+    mv_final = mv_feedforward + mv_pid_derivative_integrated  # 使用积分后的 PID 微分
 
     # 绘图
     plt.figure()
     plt.plot(t, mv, label='Original MV Input', color='g')
     plt.plot(t, mv_feedforward, label='Feedforward MV', color='b', linestyle='--')
     plt.plot(t, mv_pid, label='PID MV', color='r', linestyle='-.')
-    plt.plot(t, mv_final, label='Final MV (Feedforward + PID)', color='k', linestyle=':')
+    plt.plot(t, mv_pid_derivative, label='PID Derivative MV', color='m', linestyle=':')
+    plt.plot(t, mv_pid_derivative_integrated, label='PID Derivative Integrated MV', color='c', linestyle='-')
+    plt.plot(t, mv_final, label='Final MV (Feedforward + Integrated PID Derivative)', color='k', linestyle='-')
     plt.xlabel('Time')
     plt.ylabel('MV')
-    plt.title('Simulink Model Output (MV Input & Feedforward MV & PID MV)')
+    plt.title('Simulink Model Output (MV Input & Feedforward MV & PID MV & PID Derivative & Integrated PID Derivative)')
     plt.legend(loc='best')
     plt.grid(True)
     plt.show()
     
-    return mv_input, mv_feedforward, mv_pid, mv_final
+    return mv_input, mv_feedforward, mv_pid, mv_pid_derivative, mv_pid_derivative_integrated, mv_final

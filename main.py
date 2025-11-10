@@ -19,6 +19,9 @@ SV_input = np.column_stack((t, SV[:n]))
 # 提取 pressure 输入数据
 pressure_input = np.column_stack((t, pressure[:n]))
 
+# 计算跟踪误差 e = SV - PV
+e = SV - PV  # 跟踪误差
+
 # 设置 PID 参数
 coefficient_P = 1.111
 coefficient_I = 0.0025
@@ -27,7 +30,7 @@ coefficient_P_pressure = -20  # 前馈系数
 Ts = 10  # 采样时间
 
 # Step 2: 调用 Simulink 模拟脚本并运行
-simulink_output, mv_feedforward, mv_pid, mv_final = run_simulation(mv_input, pressure_input, coefficient_P_pressure, coefficient_P, coefficient_I, coefficient_D, Ts)
+simulink_output, mv_feedforward, mv_pid, mv_pid_derivative, mv_pid_derivative_integrated, mv_final = run_simulation(mv_input, pressure_input, e, coefficient_P_pressure, coefficient_P, coefficient_I, coefficient_D, Ts)
 
 # Step 3: 绘制结果
 plt.figure()
@@ -36,7 +39,9 @@ plt.plot(time, SV, '--r', label='SV')
 plt.plot(time, mv, '-.g', label='MV')
 plt.plot(time, mv_feedforward, ':k', label='Feedforward MV')  # 绘制前馈 mv
 plt.plot(time, mv_pid, '--m', label='PID MV')  # 绘制 PID mv
-plt.plot(time, mv_final, '-k', label='Final MV (Feedforward + PID)')  # 绘制最终 mv
+plt.plot(time, mv_pid_derivative, '--c', label='PID Derivative MV')  # 绘制微分后的 PID mv
+plt.plot(time, mv_pid_derivative_integrated, '-.', label='Integrated PID Derivative MV')  # 绘制积分后的 PID 微分
+plt.plot(time, mv_final, '-k', label='Final MV (Feedforward + Integrated PID Derivative)')  # 绘制最终 mv
 plt.xlabel('时间')
 plt.ylabel('值')
 plt.title('TIC3011 PV / SV / MV 变化曲线')
